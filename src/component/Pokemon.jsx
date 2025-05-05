@@ -8,6 +8,9 @@ const Pokemon = () => {
   const [search, setSearch] = useState("");
   const [nextUrl, setNextUrl] = useState(null);
   const [prevUrl, setPrevUrl] = useState(null);
+  const [allPokemonNames, setAllPokemonNames] = useState([]);
+  const [suggestions, setSuggestions] = useState([]);
+
   const api = "https://pokeapi.co/api/v2/pokemon";
 
   const fetchPokemon = async (url) => {
@@ -69,9 +72,22 @@ const Pokemon = () => {
   };
 
   useEffect(() => {
-    if (search.trim() === "") {
-      fetchPokemon(api);
-    }
+    fetchPokemon(api);
+  }, []);
+
+  useEffect(() => {
+    const fetchAllNames = async () => {
+      try {
+        const res = await fetch("https://pokeapi.co/api/v2/pokemon?limit=10000");
+        const data = await res.json();
+        const names = data.results.map(poke => poke.name);
+        setAllPokemonNames(names);
+      } catch (error) {
+        console.error("Error fetching Pokémon names:", error);
+      }
+    };
+
+    fetchAllNames();
   }, []);
 
   useEffect(() => {
@@ -82,9 +98,24 @@ const Pokemon = () => {
     }
   }, [search]);
 
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearch(value);
+
+    if (value.trim() === "") {
+      setSuggestions([]);
+    } else {
+      const filtered = allPokemonNames
+        .filter(name => name.toLowerCase().startsWith(value.toLowerCase()))
+        .slice(0, 10);
+      setSuggestions(filtered);
+    }
+  };
+
   const handleNext = () => {
     if (nextUrl) {
-      setSearch(""); // Clear search to go back to pagination
+      setSearch("");
+      setSuggestions([]);
       fetchPokemon(nextUrl);
     }
   };
@@ -92,6 +123,7 @@ const Pokemon = () => {
   const handlePrevious = () => {
     if (prevUrl) {
       setSearch("");
+      setSuggestions([]);
       fetchPokemon(prevUrl);
     }
   };
@@ -113,9 +145,25 @@ const Pokemon = () => {
           type="text"
           placeholder="Search Pokémon by name"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={handleSearchChange}
           className="px-4 py-2 border border-gray-300 rounded-md w-64 focus:outline-none focus:ring-2 focus:ring-blue-400"
         />
+        {suggestions.length > 0 && (
+          <ul className="bg-white border border-gray-300 rounded-md w-64 mx-auto text-left shadow mt-1 max-h-48 overflow-y-auto z-10 absolute left-1/2 transform -translate-x-1/2">
+            {suggestions.map((suggestion, index) => (
+              <li
+                key={index}
+                onClick={() => {
+                  setSearch(suggestion);
+                  setSuggestions([]);
+                }}
+                className="px-4 py-2 cursor-pointer hover:bg-blue-100"
+              >
+                {suggestion}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div className="flex justify-center items-center min-h-screen px-4">
