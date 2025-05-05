@@ -8,7 +8,7 @@ const Pokemon = () => {
   const [search, setSearch] = useState("");
   const [nextUrl, setNextUrl] = useState(null);
   const [prevUrl, setPrevUrl] = useState(null);
-  const [allPokemonNames, setAllPokemonNames] = useState([]);
+  const [allPokemon, setAllPokemon] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
 
   const api = "https://pokeapi.co/api/v2/pokemon";
@@ -43,29 +43,28 @@ const Pokemon = () => {
     }
   };
 
-  const fetchSearchedPokemon = async (name) => {
+  const fetchPokemonByNames = async (names) => {
     try {
       setLoading(true);
-      const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${name.toLowerCase()}`);
-      if (!res.ok) {
-        setPokemon([]);
-        setLoading(false);
-        return;
-      }
-      const data = await res.json();
-      const result = [{
+      const requests = names.map(name =>
+        fetch(`https://pokeapi.co/api/v2/pokemon/${name}`).then(res => res.json())
+      );
+
+      const dataList = await Promise.all(requests);
+      const result = dataList.map(data => ({
         id: data.id,
         name: data.name,
         image: data.sprites.front_default,
         types: data.types,
         stats: data.stats,
-      }];
+      }));
+
       setPokemon(result);
       setNextUrl(null);
       setPrevUrl(null);
       setLoading(false);
     } catch (error) {
-      console.error("Error fetching searched Pokémon:", error);
+      console.error("Error fetching filtered Pokémon:", error);
       setPokemon([]);
       setLoading(false);
     }
@@ -76,39 +75,39 @@ const Pokemon = () => {
   }, []);
 
   useEffect(() => {
-    const fetchAllNames = async () => {
+    const fetchAll = async () => {
       try {
         const res = await fetch("https://pokeapi.co/api/v2/pokemon?limit=10000");
         const data = await res.json();
-        const names = data.results.map(poke => poke.name);
-        setAllPokemonNames(names);
+        setAllPokemon(data.results); // contains name + url
       } catch (error) {
-        console.error("Error fetching Pokémon names:", error);
+        console.error("Error fetching Pokémon list:", error);
       }
     };
-
-    fetchAllNames();
+    fetchAll();
   }, []);
 
-  useEffect(() => {
-    if (search.trim() !== "") {
-      fetchSearchedPokemon(search);
-    } else {
-      fetchPokemon(api);
-    }
-  }, [search]);
-
-  const handleSearchChange = (e) => {
+  const handleSearchChange = async (e) => {
     const value = e.target.value;
     setSearch(value);
 
     if (value.trim() === "") {
       setSuggestions([]);
+      fetchPokemon(api);
+      return;
+    }
+
+    const filteredNames = allPokemon
+      .filter(poke => poke.name.startsWith(value.toLowerCase()))
+      .map(p => p.name)
+      .slice(0, 10);
+
+    setSuggestions(filteredNames);
+
+    if (filteredNames.length > 0) {
+      await fetchPokemonByNames(filteredNames);
     } else {
-      const filtered = allPokemonNames
-        .filter(name => name.toLowerCase().startsWith(value.toLowerCase()))
-        .slice(0, 10);
-      setSuggestions(filtered);
+      setPokemon([]);
     }
   };
 
@@ -138,7 +137,7 @@ const Pokemon = () => {
 
   return (
     <>
-      <div className="max-w-4xl mx-auto p-4 text-center">
+      <div className="max-w-4xl mx-auto p-4 text-center relative">
         <h2 className="text-3xl font-bold mb-4">Pokémon Card</h2>
         <label className="font-semibold mr-2">Search Name:</label>
         <input
@@ -148,7 +147,7 @@ const Pokemon = () => {
           onChange={handleSearchChange}
           className="px-4 py-2 border border-gray-300 rounded-md w-64 focus:outline-none focus:ring-2 focus:ring-blue-400"
         />
-        {suggestions.length > 0 && (
+        {suggestions.length > 0 && search.trim() !== "" && (
           <ul className="bg-white border border-gray-300 rounded-md w-64 mx-auto text-left shadow mt-1 max-h-48 overflow-y-auto z-10 absolute left-1/2 transform -translate-x-1/2">
             {suggestions.map((suggestion, index) => (
               <li
@@ -156,6 +155,7 @@ const Pokemon = () => {
                 onClick={() => {
                   setSearch(suggestion);
                   setSuggestions([]);
+                  fetchPokemonByNames([suggestion]);
                 }}
                 className="px-4 py-2 cursor-pointer hover:bg-blue-100"
               >
